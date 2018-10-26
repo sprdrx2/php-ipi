@@ -4,12 +4,6 @@ if(!isset($_SESSION)) { session_start(); }
 
 define('NOM_FILLER_VALUE','Nom');
 define('PRENOM_FILLER_VALUE','Prénom');
-define('MYSQL_HOST','localhost');
-define('MYSQL_USER','saami');
-define('MYSQL_PW','toto');
-define('MYSQL_DB','saami');
-
-//// helpers fonctions
 
 function error($msg) {
 	$_SESSION['error'] = $msg;
@@ -19,7 +13,7 @@ function error($msg) {
 
 function debug($msg) {
 	if(empty($msg)) { $msg .= print_r($_POST,$return = true); }
-	$_SESSION['debug'] .= $msg . '<br />';
+	$_SESSION['debug'] .= $msg;
 }
 
 function success() {
@@ -27,7 +21,6 @@ function success() {
 		header('Location: crud.php');
 }
 
-// on récupére et vide error et debug si présent dans la session
 if (!empty($_SESSION['debug'])) { 
 	$debug = $_SESSION['debug'];
 	$_SESSION['debug'] = null;
@@ -38,22 +31,14 @@ if (!empty($_SESSION['error'])) {
 	$_SESSION['error'] = null;
 }
 
-// connexion DB
-
-$dsn = sprintf('mysql:host=%s;dbname=%s;', MYSQL_HOST, MYSQL_DB);
-try {
-	$db 	= new PDO($dsn, MYSQL_USER, MYSQL_PW);
-} catch (PDOException $e){			// TODO: bug: too_many_redirects
-	debug($e->getMessage());
-	error('db: connexion impossible');
+$cnx = mysqli_connect('localhost','saami','toto','saami');
+if (!$cnx) {
+	error('Problème de connexion à la base de données.');
 }
-
 $query 	= 'SELECT * FROM luserz ORDER BY nom,prenom;';
-$luserz = $db->query($query);
+$luserz = mysqli_query($link_identifier = $cnx, $query = $query);
 
-//// traitement des requêtes
-
-// DELETE
+// delete
 if (isset($_GET['delete'])) {
 	if (empty($_GET['delete'])) {
 		error('delete: id non fourni');
@@ -65,16 +50,17 @@ if (isset($_GET['delete'])) {
 		}
 	
 		$query = sprintf("SELECT id FROM luserz WHERE id=%d;", $targetID);
-		$select = $db->query($query);
+		$select = mysqli_query($link_identifier = $cnx, $query = $query);
 
-		if ($select->rowCount() < 1) {
+
+		if ($select->num_rows < 1) {
 			error('delete: luser inconnu.');
-		} else if ($select->rowCount() > 1) {
+		} else if ($select->num_rows > 1) {
 			error('delete: id not unique wtf.');
 		}
 	
 		$query = sprintf("DELETE FROM luserz WHERE id = %d;", $targetID);
-		$delete = $db->query($query);
+		$delete = mysqli_query($link_identifier = $cnx, $query = $query);
 
 		if(!$delete) {
 			error('delete: operation impossible dsl.');
@@ -83,6 +69,8 @@ if (isset($_GET['delete'])) {
 		}
 	}
 }
+
+
 
 // INSERT (si demandé)
 
@@ -138,13 +126,13 @@ if(!empty($_POST['method'])) {
 				$query = sprintf("SELECT id FROM luserz WHERE id = '%s';", $targetId);
 				break;
 		}
-		$select = $db->query($query);
+		$select = mysqli_query($link_identifier = $cnx, $query = $query);
 
 		// TODO: à tester avec curl
 		// si insert l'user ne doit pas exister, si update il doit exister	
-		if ($select->rowCount() > 1 )							{ error("$method: id not unique wtf."); }
-		if ($select->rowCount() > 0 && $method == 'insert') 	{ error("$method: utilisateur existant."); }
-		if ($select->rowCount() < 1 && $method == 'update') 	{ error("$method: utilisateur inexistant"); }
+		if ($select->num_rows > 1 )							{ error("$method: id not unique wtf."); }
+		if ($select->num_rows > 0 && $method == 'insert') 	{ error("$method: utilisateur existant."); }
+		if ($select->num_rows < 1 && $method == 'update') 	{ error("$method: utilisateur inexistant"); }
 
 		/// insertion or updation
 		// construction requete
@@ -158,7 +146,7 @@ if(!empty($_POST['method'])) {
 				break;
 		}
 		debug($query);
-		$response = $db->query($query);
+		$response = mysqli_query($link_identifier = $cnx, $query = $query);
 
 		if (!$response) {
 			error("$method: insertion dans la bdd impossible.");
@@ -167,6 +155,8 @@ if(!empty($_POST['method'])) {
 		}
 	}
 }
+
+
 ?>
 
 <!DOCTYPE html>
@@ -191,7 +181,7 @@ if(!empty($_POST['method'])) {
 	<?php } ?>
 
 	<?php if(!empty($debug)) { ?>
-	<p id="debug"><?php echo $debug; ?></p>
+	<p id="debug">debug: <?php echo $debug; ?></p>
 	<?php } ?>
 
 	<form method="post" action="crud.php">
@@ -203,7 +193,7 @@ if(!empty($_POST['method'])) {
 	</form>
 	
 	<?php if($luserz) {?>
-		<?php foreach($luserz as $row) { ?>
+		<?php while($row = mysqli_fetch_assoc($luserz)) { ?>
 	<form method="post" action="crud.php">
 		<input name="nom" 		type="text" 	value="<?php echo $row['nom']; ?>" />
 		<input name="prenom" 	type="text" 	value="<?php echo $row['prenom']; ?>" />	
